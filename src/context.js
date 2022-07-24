@@ -1,60 +1,107 @@
-import React, { useContext, useEffect, useReducer } from "react";
+import axios from "axios";
+import React, { useState, useContext } from "react";
 
-import {
-	SET_LOADING,
-	SET_STORIES,
-	REMOVE_STORY,
-	HANDLE_PAGE,
-	HANDLE_SEARCH
-} from "./actions";
-import reducer from "./reducer";
-
-const API_ENDPOINT = "https://hn.algolia.com/api/v1/search?";
-
-const initialState = {
-	isLoading: true,
-	hits: [],
-	query: "react",
-	page: 0,
-	nbPages: 0
+const table = {
+	sports: 21,
+	history: 23,
+	politics: 24
 };
+
+const API_ENDPOINT = "https://opentdb.com/api.php?";
+
+// const url = "";
+// const tempUrl =
+// 	"https://opentdb.com/api.php?amount=10&category=21&difficulty=easy&type=multiple";
 
 const AppContext = React.createContext();
 
 const AppProvider = ({ children }) => {
-	const [state, dispatch] = useReducer(reducer, initialState);
-
-	const fetchStories = async (url) => {
-		dispatch({ type: SET_LOADING });
-		try {
-			const response = await fetch(url);
-			const data = await response.json();
-			dispatch({
-				type: SET_STORIES,
-				payload: { hits: data.hits, nbPages: data.nbPages }
-			});
-		} catch (error) {
-			console.log(error);
+	const [waiting, setWaiting] = useState(true);
+	const [loading, setLoading] = useState(false);
+	const [questions, setQuestions] = useState([]);
+	const [index, setIndex] = useState(0);
+	const [correct, setCorrect] = useState(0);
+	const [error, setError] = useState(false);
+	const [isModalOpen, setIsModalOpen] = useState(false);
+	const [quiz, setQuiz] = useState({
+		amount: 10,
+		category: "sports",
+		difficulty: "easy"
+	});
+	const fetchQuestions = async (url) => {
+		setLoading(true);
+		setWaiting(false);
+		const response = await axios(url).catch((err) => console.log(err));
+		if (response) {
+			const data = response.data.results;
+			if (data.length > 0) {
+				setQuestions(data);
+				setLoading(false);
+				setWaiting(false);
+				setError(false);
+			} else {
+				setWaiting(true);
+				setError(true);
+			}
 		}
 	};
-	const removeStory = (id) => {
-		dispatch({
-			type: REMOVE_STORY,
-			payload: id
+	const nextQuestion = () => {
+		setIndex((prevIndex) => {
+			const newIndex = prevIndex + 1;
+			if (newIndex === questions.length) {
+				openModal();
+				return 0;
+			}
+			return newIndex;
 		});
 	};
-	const handleChange = (value) => {
-		dispatch({ type: HANDLE_SEARCH, payload: value });
+	const checkAnswer = (value) => {
+		if (value) {
+			setCorrect((prevCorrect) => prevCorrect + 1);
+		}
+		nextQuestion();
 	};
-	const handlePage = (type) => {
-		dispatch({ type: HANDLE_PAGE, payload: type });
+	const openModal = () => {
+		setIsModalOpen(true);
 	};
-	useEffect(() => {
-		fetchStories(`${API_ENDPOINT}query=${state.query}&page=${state.page}`);
-	}, [state.query, state.page]);
+	const closeModal = () => {
+		setWaiting(true);
+		setCorrect(0);
+		setIsModalOpen(false);
+	};
+	const handleChange = (e) => {
+		e.persist();
+		console.log(e.target);
+		console.log(e.target.name, e.target.value);
+
+		setQuiz((prevQuiz) => {
+			return { ...prevQuiz, [e.target.name]: e.target.value };
+		});
+	};
+	const handleSubmit = (e) => {
+		e.preventDefault();
+		const { amount, category, difficulty } = quiz;
+		const url = `${API_ENDPOINT}amount=${amount}&category=${table[category]}&difficulty=${difficulty}&type=multiple`;
+		fetchQuestions(url);
+	};
 	return (
 		<AppContext.Provider
-			value={{ ...state, removeStory, handleChange, handlePage }}
+			value={{
+				waiting,
+				error,
+				loading,
+				questions,
+				index,
+				correct,
+				isModalOpen,
+				nextQuestion,
+				checkAnswer,
+				closeModal,
+				quiz,
+				setQuiz,
+				handleChange,
+				handleSubmit
+			}}
 		>
 			{children}
 		</AppContext.Provider>
